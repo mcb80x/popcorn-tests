@@ -12,11 +12,16 @@ scene('Action Potential Generation', 'hodghux') ->
 
         stage 'hodghux', 'demo'
 
-        wait 3000
+        wait 500
 
         line 'ap_line1',
             'This is the text of the line that would be in the audio file',
             {'NaChannelVisible': true, 'KChannelVisible': false} # <-- settings for the stage
+
+        play 'demo'
+
+        wait 5000
+
 
     beat('Another beat') ->
         video 'http://videos.mozilla.org/serv/webmademovies/popcornplug.mp4',
@@ -37,7 +42,7 @@ scene('Action Potential Generation', 'hodghux') ->
 
 
         # goal ->
-        #   if stage.gbar_Max > 2.0
+        #   if stage.gbar_Na > 2.0
         #       next
         #   else if time > 10.0
         #       'hint1'

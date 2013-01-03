@@ -55,7 +55,7 @@ class LessonElement
 class Scene extends LessonElement
     constructor: (@title, elId) ->
         if not elId?
-            elementId = @title
+            eleId = @title
 
         super(elId)
         scenes[elId] = this
@@ -133,7 +133,9 @@ class Line extends LessonElement
                     $(this).dialog('close')
                     cb() if cb?
         )
-        # @div.show()
+
+        for k,v of @state
+            @parent.stage()[k] = v
 
 
 class PlayAction extends LessonElement

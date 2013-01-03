@@ -1,9 +1,6 @@
 $ ->
 
-	console.log(scenes.hodghux)
-
-	console.log('Running...')
-	scenes.hodghux.run(-> alert('done'))
+	scenes.hodgkinhuxley.run(-> alert('done'))
 
   	# load the svg artwork and hook everything up
   	# pop = Popcorn.smart('#viddy', 'http://videos.mozilla.org/serv/webmademovies/popcornplug.mp4')

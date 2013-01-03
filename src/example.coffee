@@ -20,7 +20,26 @@ scene('Action Potential Generation', 'hodghux') ->
 
         play 'demo'
 
-        wait 5000
+        wait 1000
+
+        goal ->
+            initial:
+                transition: ->
+                    if @stage.iterations > 2
+                        return 'continue'
+                    else if @elapsedTime > 10000
+                        return 'hint1'
+            hint1:
+                action: ->
+                    line 'hint1', "That's not quite right... try again?"
+
+                transition: -> 'initial'
+
+            hint2:
+                action: ->
+                    line 'hint1', "Hmm... try more salt..."
+
+                transition: -> 'initial'
 
 
     beat('Another beat') ->

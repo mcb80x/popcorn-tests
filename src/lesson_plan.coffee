@@ -4,10 +4,21 @@ root = window ? exports
 root.registry = []
 root.scenes = {}
 root.stages = []
-currentObj = undefined
-lastObj = undefined
 
+currentStack = []
+currentObj = undefined
+
+pushCurrent = (obj) ->
+    currentStack.push(currentObj)
+    currentObj = obj
+
+popCurrent = ->
+    currentObj = currentStack.pop()
+
+
+# popcorn.js obj
 pop = undefined
+
 
 class LessonElement
 
@@ -146,6 +157,76 @@ class WaitAction extends LessonElement
         setTimeout(cb, @delay)
 
 
+class FSM extends LessonElement
+    constructor: (@states) ->
+
+        super()
+
+        # start out in the 'initial' state
+        @currentState = 'initial'
+        @delay = 500
+        @startTime = undefined
+
+        # convert DSL imperative action definitions
+        # to objects
+        for k, v of @states
+            actionObj = new LessonElement()
+            pushCurrent(actionObj)
+            if v.action?
+                v.action()
+            popCurrent()
+
+            @states[k].action = actionObj
+
+            # add the action object to the 'children'
+            # member to ensure it is init'd correctly
+            @addChild(actionObj)
+
+    init: ->
+        @stage = @parent.stage()
+        console.log('got stage = ' + @stage)
+        super()
+
+    getElapsedTime: ->
+        now = new Date().getTime()
+        return now - @startTime
+
+    transitionState: (state, cb) ->
+        stateObj = @states[state]
+
+        # pin some values to the object to make the DSL work
+        # as if by magic (sort of)
+        stateObj.elapsedTime = @getElapsedTime()
+        stateObj.stage = @stage
+
+        console.log('TRANSITION OF: state: ' + state)
+        transitionTo = stateObj.transition()
+        console.log('TRANSITION TO: state: ' + transitionTo)
+
+        if transitionTo?
+            if transitionTo is 'continue'
+                cb() if cb?
+            else
+                @runState(transitionTo, cb)
+        else
+            t = => @transitionState(state, cb)
+            setTimeout(t, @delay)
+
+    runState: (state, cb) ->
+        console.log('ACTION: state: ' + state)
+        @startTime = new Date().getTime()
+
+        if @states[state].action?
+            @states[state].action.run(=> @transitionState(state, cb))
+        else
+            @transitionState(state, cb)
+
+    run: (cb) ->
+        console.log('running fsm')
+        @runState('initial', cb)
+
+
+
 root.scene = (sceneId, title) ->
     sceneObj = new Scene(sceneId, title)
 
@@ -160,10 +241,9 @@ root.beat = (beatId) ->
     currentObj.addChild(beatObj)
 
     (f) ->
-        lastObj = currentObj
-        currentObj = beatObj
+        pushCurrent(beatObj)
         f()
-        currentObj = lastObj
+        popCurrent()
 
 root.stage = (name) ->
     s = stages[name]
@@ -195,6 +275,7 @@ root.stop_and_reset = (name) ->
     currentObj.addChild(stopResetObj)
 
 root.goal = (f) ->
-    goalObj = new Goal(f)
+    goalObj = new FSM(f())
     currentObj.addChild(goalObj)
 
+root.fsm = goal

@@ -70,6 +70,8 @@ class HodgHux extends common.ViewModel
         @maxSimTime = 10.0
         @oscope.maxX = @maxSimTime
 
+        @iterations = 0
+
         @updateTimer = undefined
 
     play: ->
@@ -87,6 +89,7 @@ class HodgHux extends common.ViewModel
             if @sim.t() >= @maxSimTime
                 @sim.reset()
                 @oscope.reset()
+                @iterations += 1
 
         @updateTimer = setInterval(update, 100)
 

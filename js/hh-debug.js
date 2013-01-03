@@ -24439,11 +24439,14 @@ $.effects.effect.transfer = function( o, done ) {
 
 var common = {'sim':{}};
 
+document.write('<scri'+'pt src="js/toaster/common/properties.js"></scr'+'ipt>')
+document.write('<scri'+'pt src="js/toaster/common/util.js"></scr'+'ipt>')
 document.write('<scri'+'pt src="js/toaster/common/bindings.js"></scr'+'ipt>')
 document.write('<scri'+'pt src="js/toaster/common/oscilloscope.js"></scr'+'ipt>')
-document.write('<scri'+'pt src="js/toaster/common/properties.js"></scr'+'ipt>')
 document.write('<scri'+'pt src="js/toaster/common/sim/hh_rk.js"></scr'+'ipt>')
-document.write('<scri'+'pt src="js/toaster/common/sim/linear_compartment.js"></scr'+'ipt>')
 document.write('<scri'+'pt src="js/toaster/common/sim/stim.js"></scr'+'ipt>')
-document.write('<scri'+'pt src="js/toaster/common/util.js"></scr'+'ipt>')
-document.write('<scri'+'pt src="js/toaster/hh_main.js"></scr'+'ipt>')
+document.write('<scri'+'pt src="js/toaster/lesson_plan.js"></scr'+'ipt>')
+document.write('<scri'+'pt src="js/toaster/hh.js"></scr'+'ipt>')
+document.write('<scri'+'pt src="js/toaster/common/sim/linear_compartment.js"></scr'+'ipt>')
+document.write('<scri'+'pt src="js/toaster/example.js"></scr'+'ipt>')
+document.write('<scri'+'pt src="js/toaster/main.js"></scr'+'ipt>')

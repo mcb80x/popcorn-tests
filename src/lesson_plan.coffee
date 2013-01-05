@@ -5,6 +5,8 @@ root.registry = []
 root.scenes = {}
 root.stages = []
 
+# Infrastructure for managing the 'current' object
+# in our little imperative DSL
 currentStack = []
 currentObj = undefined
 
@@ -15,6 +17,15 @@ pushCurrent = (obj) ->
 popCurrent = ->
     currentObj = currentStack.pop()
 
+
+# Lesson Elements
+# These are the objects that the DSL will actually build
+# They are organized hierarchically with a "Scene" at the
+# top level, with story "beats" below
+# This code is a bit of a mess at the moment, but it is
+# basically functional
+
+# Base LessonElement
 class LessonElement
 
     constructor: (@elementId) ->
@@ -25,10 +36,13 @@ class LessonElement
         @children.push(child)
         child.parent = this
 
+    # Init is called after the DOM is fully available
     init: ->
         if @children?
             child.init() for child in @children
 
+    # run starting from one of this element's children
+    # this call allows recursive function call chaining
     runStartingAt: (index, cb) ->
         console.log('runStartAt index: ' + index)
         if index > @children.length - 1
@@ -37,6 +51,7 @@ class LessonElement
 
         @children[index].run(=> this.runStartingAt(index+1, cb))
 
+    # Run through this element and all of its children
     run: (cb) ->
         console.log('RUN')
         console.log(cb)
@@ -45,8 +60,10 @@ class LessonElement
         else
             cb() if cb?
 
+    stop: ->
+        child.stop() if child.stop? for child in @children
 
-
+# Top-level "Scene"
 class Scene extends LessonElement
     constructor: (@title, elId) ->
         if not elId?
@@ -55,7 +72,7 @@ class Scene extends LessonElement
         super(elId)
         scenes[elId] = this
 
-        @currentBeat = ko.observable(undefined)
+        @currentSegment = ko.observable(undefined)
         @currentTime = ko.observable(undefined)
 
     run: (cb) ->
@@ -65,23 +82,21 @@ class Scene extends LessonElement
 
 
 
-class Beat extends LessonElement
+
+class Interactive extends LessonElement
 
     constructor: (elId) ->
-        @duration = undefined
+        @duration = ko.observable(1.0)
         super(elId)
 
     stage: (s) ->
         if s?
             @stageObj = s
-            @duration = @stageObj.duration if @stageObj.duration?
-            console.log('duration: ')
-            console.log(@duration)
         else
             return @stageObj
 
     run: (cb) ->
-        @parent.currentBeat(@elementId)
+        @parent.currentSegment(@elementId)
         @stageObj.show() if @stageObj?
 
         hideStageWhenDone = =>
@@ -90,26 +105,40 @@ class Beat extends LessonElement
 
         super(hideStageWhenDone)
 
-    type: ->
-        'blah'
-
     scene: ->
         return @parent
 
+# A somewhat hacked up video object
 class Video extends LessonElement
-    constructor: (@url, @text) ->
-        @duration = ko.observable(0.0)
+    constructor: (elId) ->
+        @duration = ko.observable(1.0)
+        @mediaUrls = {}
+
+        super(elId)
+
+    media: (fileType, url) ->
+        if url?
+            @mediaUrls[fileType] = url
+        else
+            return @mediaUrls[fileType]
+
+    mediaTypes: ->
+        return [k for k of @mediaUrls]
+
+    subtitles: (f) ->
+        # fill me in
 
     init: ->
-        if not pop?
-            @pop = Popcorn.smart('#vid', @url)
+        if not @pop?
+            @pop = Popcorn.smart('#vid', @media('mp4'))
 
         @pop.on('durationchange', =>
             console.log('duration changed!:' + @pop.duration())
             @duration(@pop.duration())
         )
 
-        @pop.load(@url)
+        console.log('Loading: ' + @media('mp4'))
+        @pop.load(@media('mp4'))
 
         super()
 
@@ -120,9 +149,13 @@ class Video extends LessonElement
         d3.select('#video').transition().style('opacity', 0.0).duration(1000)
 
     run: (cb) ->
-        console.log('play video')
 
-        scene = @parent.scene()
+        @parent.currentSegment(@elementId)
+
+        @show()
+
+        scene = @parent
+        console.log(scene)
 
         updateTimeCb = ->
             t = @currentTime()
@@ -133,9 +166,19 @@ class Video extends LessonElement
             untriggeringcb = =>
                 @pop.off('ended', cb)
                 @pop.off('updatetime', updateTimeCb)
+                @hide()
                 cb()
             @pop.on('ended', untriggeringcb)
         @pop.play()
+
+    stop: ->
+        @pop.stop()
+        @hide()
+
+
+# A "line" is a bit of audio + text that can be played
+# over-top some demo.  If audio is disabled, it will
+# display a modal dialog box (audio not yet enabled)
 
 class Line extends LessonElement
 
@@ -165,6 +208,8 @@ class Line extends LessonElement
             @parent.stage()[k] = v
 
 
+# Actions to "instruct" a demo to do something
+
 class PlayAction extends LessonElement
     constructor: (stageId) ->
     run: (cb) ->
@@ -185,7 +230,9 @@ class WaitAction extends LessonElement
         console.log('waiting ' + @delay + ' ms...')
         setTimeout(cb, @delay)
 
-
+# A finite state machine
+# The idea here is to have a simple state machine so
+# that simple interactive goals can be easily defined
 class FSM extends LessonElement
     constructor: (@states) ->
 
@@ -228,9 +275,7 @@ class FSM extends LessonElement
         stateObj.elapsedTime = @getElapsedTime()
         stateObj.stage = @stage
 
-        console.log('TRANSITION OF: state: ' + state)
         transitionTo = stateObj.transition()
-        console.log('TRANSITION TO: state: ' + transitionTo)
 
         if transitionTo?
             if transitionTo is 'continue'
@@ -255,6 +300,11 @@ class FSM extends LessonElement
         @runState('initial', cb)
 
 
+# Imperative Domain Specific Language bits
+# Some slightly abused coffescript syntax to make
+# the final script read more like an outline or
+# "script" in the lines-in-a-documentary sense of the
+# word
 
 root.scene = (sceneId, title) ->
     sceneObj = new Scene(sceneId, title)
@@ -263,9 +313,9 @@ root.scene = (sceneId, title) ->
         currentObj = sceneObj
         f()
 
-root.beat = (beatId) ->
+root.interactive = (beatId, objClass) ->
     #register the id
-    beatObj = new Beat(beatId)
+    beatObj = new Interactive(beatId, objClass)
 
     currentObj.addChild(beatObj)
 
@@ -286,10 +336,25 @@ root.line = (text, audio, state) ->
 
 root.lines = line
 
-root.video = (fileStem, text) ->
-    videoObj = new Video(fileStem, text)
+root.video = (name) ->
+    videoObj = new Video(name)
     currentObj.addChild(videoObj)
-    currentObj.stage(videoObj)
+
+    (f) ->
+        pushCurrent(videoObj)
+        f()
+        popCurrent()
+
+root.mp4 = (f) ->
+    currentObj.media('mp4', f)
+root.webm = (f) ->
+    currentObj.media('webm', f)
+
+root.subtitles = (f) ->
+    currentObj.subtitles(f)
+
+root.duration = (t) ->
+    currentObj.duration(t) if currentObj.duration?
 
 root.play = (name) ->
     runObj = new PlayAction(name)

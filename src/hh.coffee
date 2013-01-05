@@ -22,6 +22,9 @@ root = window ? exports
 # this is hacky for now
 class HodgHux extends common.ViewModel
 
+    constructor: ->
+        @duration = ko.observable(10.0) # estimated duration (dummy value 5min)
+
     init: ->
 
         # Build a new simulation object

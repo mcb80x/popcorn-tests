@@ -1,4 +1,8 @@
+# << timeline
+
 $ ->
+
+	t = new common.Timeline('#timeline', scenes.hodgkinhuxley)
 
 	scenes.hodgkinhuxley.run(-> alert('done'))
 

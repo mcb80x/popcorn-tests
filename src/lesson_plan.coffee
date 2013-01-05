@@ -15,11 +15,6 @@ pushCurrent = (obj) ->
 popCurrent = ->
     currentObj = currentStack.pop()
 
-
-# popcorn.js obj
-pop = undefined
-
-
 class LessonElement
 
     constructor: (@elementId) ->
@@ -60,41 +55,65 @@ class Scene extends LessonElement
         super(elId)
         scenes[elId] = this
 
+        @currentBeat = ko.observable(undefined)
+        @currentTime = ko.observable(undefined)
+
     run: (cb) ->
         @init()
         console.log('scene[' + @elementId + ']')
         super(cb)
 
+
+
 class Beat extends LessonElement
+
+    constructor: (elId) ->
+        @duration = undefined
+        super(elId)
 
     stage: (s) ->
         if s?
             @stageObj = s
+            @duration = @stageObj.duration if @stageObj.duration?
+            console.log('duration: ')
+            console.log(@duration)
         else
             return @stageObj
 
     run: (cb) ->
-        console.log('beat[' + @elementId + ']')
+        @parent.currentBeat(@elementId)
         @stageObj.show() if @stageObj?
 
         hideStageWhenDone = =>
-            @stageObj.hide() is @stageObj?
-            console.log('cb after hiding: ')
-            console.log(cb)
+            @stageObj.hide() if @stageObj? and @stageObj.hide?
             cb() if cb?
 
         super(hideStageWhenDone)
 
+    type: ->
+        'blah'
+
+    scene: ->
+        return @parent
+
 class Video extends LessonElement
     constructor: (@url, @text) ->
+        @duration = ko.observable(0.0)
 
     init: ->
         if not pop?
-            pop = Popcorn.smart('#vid', @url)
+            @pop = Popcorn.smart('#vid', @url)
+
+        @pop.on('durationchange', =>
+            console.log('duration changed!:' + @pop.duration())
+            @duration(@pop.duration())
+        )
+
+        @pop.load(@url)
+
         super()
 
     show: ->
-        pop.load(@url)
         d3.select('#video').transition().style('opacity', 1.0).duration(1000)
 
     hide: ->
@@ -103,12 +122,20 @@ class Video extends LessonElement
     run: (cb) ->
         console.log('play video')
 
+        scene = @parent.scene()
+
+        updateTimeCb = ->
+            t = @currentTime()
+            scene.currentTime(t)
+        @pop.on('timeupdate', updateTimeCb)
+
         if cb?
-            untriggeringcb = ->
-                pop.off('ended', cb)
+            untriggeringcb = =>
+                @pop.off('ended', cb)
+                @pop.off('updatetime', updateTimeCb)
                 cb()
-            pop.on('ended', untriggeringcb)
-        pop.play()
+            @pop.on('ended', untriggeringcb)
+        @pop.play()
 
 class Line extends LessonElement
 

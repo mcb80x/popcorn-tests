@@ -39,12 +39,14 @@ class LessonElement
         registry[@elementId] = this
         @children = []
         @childIndexLookup = {}
+        @childLookup = {}
         @parent = undefined
 
     addChild: (child) ->
         child.parent = this
         @children.push(child)
         @childIndexLookup[child.elementId] = @children.length - 1
+        @childLookup[child.elementId] = child
 
     # Init is called after the DOM is fully available
     init: ->
@@ -69,7 +71,6 @@ class LessonElement
             @children[nextIndex].run()
         else
             @yield()
-
 
     # run starting from one of this element's children
     # this call allows recursive function call chaining
@@ -103,14 +104,15 @@ class LessonElement
             @runChildrenStartingAtIndex(0)
 
 
-    runAtPath: (path, cb) ->
+    runAtSegment: (path) ->
         if path is ''
-            @run(cb)
+            return @run()
+
         splitPath = path.split(':')
 
         head = splitPath.shift()
 
-        @childLookup[head].runAtPath(splitPath.join(':'), cb)
+        @childLookup[head].runAtSegment(splitPath.join(':'))
 
     stop: ->
         child.stop() if child.stop? for child in @children
@@ -230,10 +232,10 @@ class Video extends LessonElement
 
         # yield when the view has ended
         @pop.on('ended', cb)
-        @pop.play()
+        @pop.play(0)
 
     stop: ->
-        @pop.stop()
+        @pop.pause()
         @hide()
 
 

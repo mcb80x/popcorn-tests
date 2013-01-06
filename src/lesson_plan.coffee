@@ -63,7 +63,7 @@ class LessonElement
     resumeAfterIndex: (childIndex, cb) ->
         nextIndex = childIndex + 1
         if @children[nextIndex]?
-            @children[nextIndex].run()
+            @children[nextIndex].run(cb)
         else
             @yield(cb)
 
@@ -198,6 +198,7 @@ class Video extends LessonElement
 
     run: (cb) ->
 
+        console.log(cb)
         @parent.currentSegment(@elementId)
 
         @show()
@@ -212,6 +213,7 @@ class Video extends LessonElement
 
         if cb?
             untriggeringcb = =>
+                console.log('popcorn triggered cb')
                 @pop.off('ended', cb)
                 @pop.off('updatetime', updateTimeCb)
                 @hide()

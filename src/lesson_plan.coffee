@@ -18,6 +18,11 @@ popCurrent = ->
     currentObj = currentStack.pop()
 
 
+elementCounter = -1
+uniqueElementId = ->
+    elementCounter += 1
+    'element_assigned_id_' + elementCounter
+
 # Lesson Elements
 # These are the objects that the DSL will actually build
 # They are organized hierarchically with a "Scene" at the
@@ -29,36 +34,77 @@ popCurrent = ->
 class LessonElement
 
     constructor: (@elementId) ->
+        if not @elementId?
+            @elementId = uniqueElementId()
         registry[@elementId] = this
         @children = []
+        @childIndexLookup = {}
+        @parent = undefined
 
     addChild: (child) ->
-        @children.push(child)
         child.parent = this
+        @children.push(child)
+        @childIndexLookup[child.elementId] = @children.length - 1
 
     # Init is called after the DOM is fully available
     init: ->
         if @children?
             child.init() for child in @children
 
+
+    resumeAfter: (childId, cb) ->
+        console.log('resumeAfter: ' + childId)
+
+        if not @children? or @children.length is 0
+            @parent.resumeAfter(@elementId, cb)
+        childIndex = @childIndexLookup[childId]
+        @resumeAfterIndex(childIndex, cb)
+
+    resumeAfterIndex: (childIndex, cb) ->
+        nextIndex = childIndex + 1
+        if @children[nextIndex]?
+            @children[nextIndex].run()
+        else
+            @yield(cb)
+
+
     # run starting from one of this element's children
     # this call allows recursive function call chaining
-    runStartingAt: (index, cb) ->
-        console.log('runStartAt index: ' + index)
+    runChildrenStartingAtIndex: (index, cb) ->
+        console.log('runStartingAtIndex index: ' + index)
         if index > @children.length - 1
-            cb() if cb?
+            @yield(cb)
             return
 
-        @children[index].run(=> this.runStartingAt(index+1, cb))
+        @children[index].run(=>
+            @runChildrenStartingAtIndex(index+1, cb)
+        )
+
+    yield: (cb) ->
+        if @parent?
+            @parent.resumeAfter(@elementId, cb)
+        else
+            console.log('no parent:')
+            console.log(this)
+            cb()
 
     # Run through this element and all of its children
     run: (cb) ->
-        console.log('RUN')
-        console.log(cb)
-        if @children?
-            @runStartingAt(0, cb)
+
+        if not @children?
+            cb()
         else
-            cb() if cb?
+            @runChildrenStartingAtIndex(0, cb)
+
+
+    runAtPath: (path, cb) ->
+        if path is ''
+            @run(cb)
+        splitPath = path.split(':')
+
+        head = splitPath.shift()
+
+        @childLookup[head].runAtPath(splitPath.join(':'), cb)
 
     stop: ->
         child.stop() if child.stop? for child in @children
@@ -70,6 +116,8 @@ class Scene extends LessonElement
             eleId = @title
 
         super(elId)
+
+        # register this scene in the global registry
         scenes[elId] = this
 
         @currentSegment = ko.observable(undefined)
@@ -183,6 +231,7 @@ class Video extends LessonElement
 class Line extends LessonElement
 
     constructor: (@audio, @text, @state) ->
+        super()
 
     init: ->
         #@div = d3.select('#prompt_overlay')
@@ -201,6 +250,7 @@ class Line extends LessonElement
             buttons:
                 'continue': ->
                     $(this).dialog('close')
+                    console.log(cb)
                     cb() if cb?
         )
 
@@ -208,17 +258,23 @@ class Line extends LessonElement
             @parent.stage()[k] = v
 
 
+
 # Actions to "instruct" a demo to do something
 
 class PlayAction extends LessonElement
-    constructor: (stageId) ->
+    constructor: (@stageId) ->
+        super()
+
     run: (cb) ->
+        console.log('running play action')
         @parent.stage().play()
         cb()
 
 class StopAndResetAction extends LessonElement
 
-    constructor: (stageId) ->
+    constructor: (@stageId) ->
+        super()
+
     run: (cb) ->
         @parent.stage().stop()
         cb()
@@ -226,6 +282,8 @@ class StopAndResetAction extends LessonElement
 
 class WaitAction extends LessonElement
     constructor: (@delay) ->
+        super()
+
     run: (cb) ->
         console.log('waiting ' + @delay + ' ms...')
         setTimeout(cb, @delay)
@@ -252,11 +310,17 @@ class FSM extends LessonElement
                 v.action()
             popCurrent()
 
+
             @states[k].action = actionObj
 
             # add the action object to the 'children'
             # member to ensure it is init'd correctly
             @addChild(actionObj)
+
+            # this is a bit arcane: basically,
+            # we're forcing the action to call its callback
+            # rather than riding back up the hierarchy
+            actionObj.parent = undefined
 
     init: ->
         @stage = @parent.stage()
@@ -268,6 +332,9 @@ class FSM extends LessonElement
         return now - @startTime
 
     transitionState: (state, cb) ->
+
+        console.log('transition to: ' + state)
+
         stateObj = @states[state]
 
         # pin some values to the object to make the DSL work
@@ -313,9 +380,9 @@ root.scene = (sceneId, title) ->
         currentObj = sceneObj
         f()
 
-root.interactive = (beatId, objClass) ->
+root.interactive = (beatId) ->
     #register the id
-    beatObj = new Interactive(beatId, objClass)
+    beatObj = new Interactive(beatId)
 
     currentObj.addChild(beatObj)
 

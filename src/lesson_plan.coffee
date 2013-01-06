@@ -52,49 +52,55 @@ class LessonElement
             child.init() for child in @children
 
 
-    resumeAfter: (childId, cb) ->
+    # methods for picking up after a child node
+    # has yielded
+    resumeAfterChild: (child) ->
+        childId = child.elementId
         console.log('resumeAfter: ' + childId)
 
         if not @children? or @children.length is 0
-            @parent.resumeAfter(@elementId, cb)
+            @yield()
         childIndex = @childIndexLookup[childId]
-        @resumeAfterIndex(childIndex, cb)
+        @resumeAfterIndex(childIndex)
 
-    resumeAfterIndex: (childIndex, cb) ->
+    resumeAfterIndex: (childIndex) ->
         nextIndex = childIndex + 1
         if @children[nextIndex]?
-            @children[nextIndex].run(cb)
+            @children[nextIndex].run()
         else
-            @yield(cb)
+            @yield()
 
 
     # run starting from one of this element's children
     # this call allows recursive function call chaining
     runChildrenStartingAtIndex: (index, cb) ->
         console.log('runStartingAtIndex index: ' + index)
+
+        # if there is no next child, just yield
         if index > @children.length - 1
-            @yield(cb)
+            @yield()
             return
 
-        @children[index].run(=>
-            @runChildrenStartingAtIndex(index+1, cb)
-        )
+        # otherwise, run the child node
+        @children[index].run()
 
-    yield: (cb) ->
+    yield: ->
         if @parent?
-            @parent.resumeAfter(@elementId, cb)
+            @parent.resumeAfterChild(this)
         else
             console.log('no parent:')
             console.log(this)
-            cb()
 
     # Run through this element and all of its children
-    run: (cb) ->
+    run: ->
 
+        # If this node doesn't have any children, yield
+        # back up to the parent
         if not @children?
-            cb()
+            @yield()
         else
-            @runChildrenStartingAtIndex(0, cb)
+            # start running the child nodes
+            @runChildrenStartingAtIndex(0)
 
 
     runAtPath: (path, cb) ->
@@ -123,10 +129,10 @@ class Scene extends LessonElement
         @currentSegment = ko.observable(undefined)
         @currentTime = ko.observable(undefined)
 
-    run: (cb) ->
+    run: ->
         @init()
         console.log('scene[' + @elementId + ']')
-        super(cb)
+        super()
 
 
 
@@ -143,15 +149,20 @@ class Interactive extends LessonElement
         else
             return @stageObj
 
-    run: (cb) ->
+    yield: ->
+        # hide the stage before yielding to parent
+        @stageObj.hide() if @stageObj? and @stageObj.hide?
+        super()
+
+    run: () ->
+
+        # show the stage and announce the current
+        # segment
         @parent.currentSegment(@elementId)
         @stageObj.show() if @stageObj?
 
-        hideStageWhenDone = =>
-            @stageObj.hide() if @stageObj? and @stageObj.hide?
-            cb() if cb?
-
-        super(hideStageWhenDone)
+        # iterate through the child nodes, as usual
+        super()
 
     scene: ->
         return @parent
@@ -198,9 +209,7 @@ class Video extends LessonElement
 
     run: (cb) ->
 
-        console.log(cb)
         @parent.currentSegment(@elementId)
-
         @show()
 
         scene = @parent
@@ -211,14 +220,16 @@ class Video extends LessonElement
             scene.currentTime(t)
         @pop.on('timeupdate', updateTimeCb)
 
-        if cb?
-            untriggeringcb = =>
-                console.log('popcorn triggered cb')
-                @pop.off('ended', cb)
-                @pop.off('updatetime', updateTimeCb)
-                @hide()
-                cb()
-            @pop.on('ended', untriggeringcb)
+        cb = =>
+            console.log('popcorn triggered cb')
+            console.log(cb)
+            @pop.off('ended', cb)
+            @pop.off('updatetime', updateTimeCb)
+            @hide()
+            @yield()
+
+        # yield when the view has ended
+        @pop.on('ended', cb)
         @pop.play()
 
     stop: ->
@@ -241,7 +252,9 @@ class Line extends LessonElement
         @div.hide()
         super()
 
-    run: (cb) ->
+    run: ->
+        cb = => @yield()
+
         @div.text(@text)
         @div.dialog(
             dialogClass: 'noTitleStuff'
@@ -252,8 +265,7 @@ class Line extends LessonElement
             buttons:
                 'continue': ->
                     $(this).dialog('close')
-                    console.log(cb)
-                    cb() if cb?
+                    cb()
         )
 
         for k,v of @state
@@ -267,27 +279,28 @@ class PlayAction extends LessonElement
     constructor: (@stageId) ->
         super()
 
-    run: (cb) ->
+    run: ->
         console.log('running play action')
         @parent.stage().play()
-        cb()
+        @yield()
 
 class StopAndResetAction extends LessonElement
 
     constructor: (@stageId) ->
         super()
 
-    run: (cb) ->
+    run: ->
         @parent.stage().stop()
-        cb()
+        @yield()
 
 
 class WaitAction extends LessonElement
     constructor: (@delay) ->
         super()
 
-    run: (cb) ->
+    run: ->
         console.log('waiting ' + @delay + ' ms...')
+        cb = => @yield()
         setTimeout(cb, @delay)
 
 # A finite state machine
@@ -322,7 +335,7 @@ class FSM extends LessonElement
             # this is a bit arcane: basically,
             # we're forcing the action to call its callback
             # rather than riding back up the hierarchy
-            actionObj.parent = undefined
+            # actionObj.parent = undefined
 
     init: ->
         @stage = @parent.stage()
@@ -333,7 +346,7 @@ class FSM extends LessonElement
         now = new Date().getTime()
         return now - @startTime
 
-    transitionState: (state, cb) ->
+    transitionState: (state) ->
 
         console.log('transition to: ' + state)
 
@@ -348,11 +361,12 @@ class FSM extends LessonElement
 
         if transitionTo?
             if transitionTo is 'continue'
-                cb() if cb?
+                console.log('yielding...')
+                @yield()
             else
-                @runState(transitionTo, cb)
+                @runState(transitionTo)
         else
-            t = => @transitionState(state, cb)
+            t = => @transitionState(state)
             setTimeout(t, @delay)
 
     runState: (state, cb) ->
@@ -360,13 +374,14 @@ class FSM extends LessonElement
         @startTime = new Date().getTime()
 
         if @states[state].action?
-            @states[state].action.run(=> @transitionState(state, cb))
+            @states[state].action.yield = => @transitionState(state)
+            @states[state].action.run()
         else
-            @transitionState(state, cb)
+            @transitionState(state)
 
-    run: (cb) ->
+    run: ->
         console.log('running fsm')
-        @runState('initial', cb)
+        @runState('initial')
 
 
 # Imperative Domain Specific Language bits

@@ -317,6 +317,7 @@ class FSM extends LessonElement
         @currentState = 'initial'
         @delay = 500
         @startTime = undefined
+        @stopping = false
 
         # convert DSL imperative action definitions
         # to objects
@@ -349,6 +350,9 @@ class FSM extends LessonElement
         return now - @startTime
 
     transitionState: (state) ->
+
+        if @stopping
+            return
 
         console.log('transition to: ' + state)
 
@@ -383,7 +387,12 @@ class FSM extends LessonElement
 
     run: ->
         console.log('running fsm')
+        @stopping = false
         @runState('initial')
+
+    stop: ->
+        @stopping = true
+        super()
 
 
 # Imperative Domain Specific Language bits
